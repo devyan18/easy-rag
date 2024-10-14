@@ -6,24 +6,33 @@ from langchain_chroma import Chroma
 from langchain.prompts import PromptTemplate
 from langchain.chains import RetrievalQA
 
-llm = ChatOllama(model="llama3.2") # Modelo de lenguaje
+# Definimos el modelo de llm que vamos a utilizar
+llm = ChatOllama(model="llama3.2:1b")
 
-file_path = "c#.pdf" # Ruta del archivo PDF
+# Definimos el path del archivo pdf (ruta relativa en este caso)
+file_path = "c#.pdf"
 
+# Cargamos el archivo pdf
 loader = PyMuPDFLoader(file_path)
 
+# Cargamos el contenido del pdf
 data_pdf = loader.load()
 
+# Definimos el tamaño de los chunks y el overlap (superposición de los chunks)
+text_splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=500)
 
-text_splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=500) # Tamaño de los chunks y el overlap (superposición de los chunks)
-
+# Dividimos el contenido del pdf en chunks
 chunks = text_splitter.split_documents(data_pdf)
 
+# Definimos el modelo de embeddings que vamos a utilizar
 embed_model = FastEmbedEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
-persist_db = "chroma_db_dir" # Directorio donde se guardará la información
-collection_db = "chroma_collection" # Nombre de la colección
+# Definimos el directorio donde se va a guardar la base de datos
+persist_db = "chroma_db_dir"
+# Definimos el nombre de la colección
+collection_db = "chroma_collection"
 
+# Creamos la base de datos con los chunks
 vs = Chroma.from_documents(
     documents=chunks,
     embedding=embed_model,
@@ -31,6 +40,7 @@ vs = Chroma.from_documents(
     collection_name=collection_db
 )
 
+# Creamos el retriever
 vectorstore = Chroma(
     embedding_function=embed_model,
     persist_directory=persist_db,
@@ -41,8 +51,9 @@ retriever = vectorstore.as_retriever(
     search_kwargs={'k': 5} # Cantidad de chunks a retornar
 )
 
+# Definimos el template de la pregunta
 custom_prompt_template = """Usa la siguiente información para responder a la pregunta del usuario.
-Si no sabes la respuesta, simplemente di que no lo sabes, no intentes inventar una respuesta.
+Si la respuesta no se encuentra en dicha información, di que no sabes la respuesta.
 
 Contexto: {context}
 Pregunta: {question}
@@ -51,11 +62,13 @@ Solo devuelve la respuesta útil a continuación y nada más. Responde siempre e
 Respuesta útil:
 """
 
+# Definimos el prompt template para la pregunta
 prompt = PromptTemplate(
     template=custom_prompt_template,
     input_variables=['context', 'question']
 )
 
+# Creamos el chain de QA para realizar la búsqueda
 qa = RetrievalQA.from_chain_type(
     llm=llm,
     chain_type="stuff",
@@ -64,7 +77,8 @@ qa = RetrievalQA.from_chain_type(
     chain_type_kwargs={'prompt': prompt}
 )
 
+# Realizamos la pregunta al modelo
 quest = input("Ingrese su pregunta: ")
-
 resp = qa.invoke({"query": quest})
+
 print(resp['result'])
